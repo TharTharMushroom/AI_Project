@@ -1,9 +1,10 @@
-from bigram_lm import *
+from trigram_lm import *
 from typing import List
 import numpy as np
 import random
 from collections import Counter
 
+TEMPERATURE = 0.8
 
 BEGIN_SYMBOL = "<S>"
 END_SYMBOL = "</S>"
@@ -21,7 +22,7 @@ def read_wikitext(path: str) -> List[List[str]]:
     for line in f:
         # If it's a non-empty line
         if len(line.strip()) > 0:
-            this_line = [BEGIN_SYMBOL]
+            this_line = [BEGIN_SYMBOL, BEGIN_SYMBOL]
             split_line = line.split(" ")
             for word in split_line:
                 if len(word.strip()) > 0:
@@ -77,41 +78,62 @@ def query_lm(lm, context: str, num_words_to_print = 5):
     print("Top 5 words and probabilities after \"" + context + "\": " + result[:-2])
 
 
-def sample_word(lm, context_word: str):
-    """
-    :param lm:
-    :param context_word:
-    :return: A randomly-sampled word to follow context_word according to the probabilities from lm.get_probability.
-    Hint: you'll want to use something like
-    import random
-    random.uniform(0, 1)
-    to get a random number, then follow the scheme described in the video for how to turn that random number
-    into a random word.
-    """
-    rand_sample = random.uniform(0,1)
+def sample_word(lm, word1, word2):
 
-    cumul_prob = 0.0
-    for word in lm.get_vocabulary():
-        prob = lm.get_probability(context_word, word)
-        cumul_prob += prob
-        if rand_sample <= cumul_prob:
-            return word
-    return END_SYMBOL
+    words = list(lm.get_vocabulary())
+
+    probs = []
+
+    for word in words:
+        p = lm.get_probability(word1, word2, word)
+
+        p = p ** (1 / TEMPERATURE)
+
+        probs.append(p)
+
+    total = sum(probs)
+
+    if total == 0:
+        return END_SYMBOL
+
+    probs = [p / total for p in probs]
+
+    r = random.random()
+
+    cumulative = 0
+
+    for i in range(len(words)):
+        cumulative += probs[i]
+
+        if r <= cumulative:
+            return words[i]
+
+    return words[-1]
 
 
-def sample_sentence(lm, context_word: str):
-    """
-    :param lm:
-    :param context_word: An initial word to seed the sentence with
-    :return: Up to 10 words as a continuation of context_word by repeatedly sampling the next word
-    """
-    sentence = [context_word]
-    for i in range(0, 10):
-        next_word = sample_word(lm, context_word)
-        context_word = next_word
-        sentence.append(next_word)
+def sample_sentence(lm, word1, word2):
+
+    sentence = []
+
+    #word1 = BEGIN_SYMBOL
+    #word2 = BEGIN_SYMBOL
+
+    for _ in range(100):
+
+        next_word = sample_word(
+            lm,
+            word1,
+            word2
+        )
+
         if next_word == END_SYMBOL:
-            return sentence
+            break
+
+        sentence.append(next_word)
+
+        word1 = word2
+        word2 = next_word
+
     return sentence
 
 
@@ -162,7 +184,7 @@ def read_data(path_to_wikitext: str = "./"):
 if __name__ == "__main__":
     (train, test) = read_data()
 
-    lm = estimate_bigram_lm(train)
+    lm = estimate_trigram_lm(train)
 
-    print_sentence(sample_sentence(lm, "We"))
+    print_sentence(sample_sentence(lm, BEGIN_SYMBOL, "We"))
 
