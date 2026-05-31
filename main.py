@@ -33,51 +33,6 @@ def read_wikitext(path: str) -> List[List[str]]:
     return lines
 
 
-def check_normalization(lm):
-    """
-    Check that the LM normalizes appropriately (probabilities sum to one) in several different contexts
-    :param lm: The BigramLanguageModel to check
-    """
-    _check_normalization(lm, "the")
-    _check_normalization(lm, "asked")
-    _check_normalization(lm, "did")
-
-
-def _check_normalization(lm, context: str) -> bool:
-    """
-    Checks the normalization of the LM in the given context
-    :param lm:
-    :param context:
-    :return: True if the language model normalizes correctly for this context, false otherwise
-    """
-    total_prob = 0.0
-    for word in lm.get_vocabulary():
-        total_prob += lm.get_probability(context, word)
-    if abs(total_prob - 1.0) > 1e-3:
-        print("ERROR: normalization test failed: probabilities sum to " + repr(total_prob) + " rather than 1 for context \"" + context + "\"")
-        return False
-    else:
-        print("Okay! Sums to " + repr(total_prob) + " after context \"" + context + "\"")
-        return True
-
-
-def query_lm(lm, context: str, num_words_to_print = 5):
-    """
-    Prints the top num_words_to_print most likely next words after context according to the lm
-    :param lm:
-    :param context:
-    :param num_words_to_print
-    """
-    context_list = [word for word in context.strip().split(" ")]
-    counter = Counter()
-    for word in lm.get_vocabulary():
-        counter[word] = lm.get_probability(context_list[-1], word)
-    result = ""
-    for (word, count) in counter.most_common(num_words_to_print):
-        result += "(" + word + ", " + repr(counter[word]) + "), "
-    print("Top 5 words and probabilities after \"" + context + "\": " + result[:-2])
-
-
 def sample_word(lm, word1, word2):
 
     words = list(lm.get_vocabulary())
@@ -111,74 +66,53 @@ def sample_word(lm, word1, word2):
     return words[-1]
 
 
-def sample_sentence(lm, word1, word2):
+def sample_sentence(lm, word1, word2, length):
+
+    original_word1 = word1
+    original_word2 = word2
 
     sentence = []
 
-    #word1 = BEGIN_SYMBOL
-    #word2 = BEGIN_SYMBOL
+    if(word1 != BEGIN_SYMBOL):
+        sentence.append(word1)
+    if(word2 != BEGIN_SYMBOL):
+        sentence.append(word2)
 
-    for _ in range(100):
+    for _ in range(length):
 
-        next_word = sample_word(
-            lm,
-            word1,
-            word2
-        )
+        next_word = sample_word(lm, word1, word2)
 
         if next_word == END_SYMBOL:
-            break
+            sentence.append("\n")
 
-        sentence.append(next_word)
+            word1 = original_word1
+            word2 = original_word2
 
-        word1 = word2
-        word2 = next_word
+            if(word1 != BEGIN_SYMBOL):
+                sentence.append(word1)
+            if(word2 != BEGIN_SYMBOL):
+                sentence.append(word2)
+
+        else:
+            sentence.append(next_word)
+            word1 = word2
+            word2 = next_word
 
     return sentence
 
 
-def get_best_word(lm, context_word: str):
-    """
-    :param lm:
-    :param context_word:
-    :return: The best word to follow context_word according to the probabilities from lm.get_probability
-    """
-    best_word = None
-    max_prob = -1.0
-    for word in lm.get_vocabulary():
-        prob = lm.get_probability(context_word, word)
-        if prob > max_prob:
-            max_prob = prob
-            best_word = word
-            print(best_word)
-    return best_word
-    #raise Exception("IMPLEMENT ME")
-
-
-def get_best_sentence(lm, context_word: str):
-    """
-    :param lm:
-    :param context_word: An initial word to seed the sentence with
-    :return: Up to 10 words as a continuation of context_word by repeatedly taking the best next word
-    """
-    sentence = [context_word]
-    for i in range(0, 30):
-        next_word = get_best_word(lm, context_word)
-        context_word = next_word
-        sentence.append(next_word)
-        if next_word == END_SYMBOL:
-            return sentence
-    return sentence
 
 def print_sentence(sentence: List[List[str]]):
     for i in range(len(sentence)):
-        print(sentence[i], end="")
-        if(i+1!=len(sentence) and sentence[i+1]!="." and sentence[i+1]!="," and sentence[i+1]!="?" and sentence[i+1]!="!" and sentence[i+1]!="'" and sentence[i+1]!="'s" and sentence[i+1]!=":"):
+        if(sentence[i] != "="):
+            print(sentence[i], end="")
+        
+        if(i+1!=len(sentence) and sentence[i+1]!="." and sentence[i+1]!="," and sentence[i+1]!="?" and sentence[i+1]!="!" and sentence[i+1]!="'" and sentence[i+1]!="'s" and sentence[i+1]!=":" and sentence[i]!="\n"):
             print(" ", end="")
 
 
 def read_data(path_to_wikitext: str = "./"):
-    return (read_wikitext(path_to_wikitext + "/wiki.train.tokens"), read_wikitext(path_to_wikitext + "/wiki.valid.tokens"))
+    return (read_wikitext(path_to_wikitext + "/wiki_slugs_train.tokens"), read_wikitext(path_to_wikitext + "/wiki_slugs_valid.tokens"))
 
 
 if __name__ == "__main__":
@@ -186,5 +120,14 @@ if __name__ == "__main__":
 
     lm = estimate_trigram_lm(train)
 
-    print_sentence(sample_sentence(lm, BEGIN_SYMBOL, "We"))
+    length = int(input("Response length: "))
+
+    w1 = input("First word (type @ for blank): ")
+    if(w1 == "@"):
+        w1 = BEGIN_SYMBOL
+    w2 = input("Second word (type @ for blank): ")
+    if(w2 == "@"):
+        w2 = BEGIN_SYMBOL
+
+    print_sentence(sample_sentence(lm, w1, w2, length))
 
